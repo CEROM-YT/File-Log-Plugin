@@ -15,6 +15,7 @@ import {
 	MarkdownFileInfo,
 	TFolder,
 	TAbstractFile,
+	HoverPopover,
 } from 'obsidian';
 // ParseYaml, 
 
@@ -33,6 +34,14 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	mySetting: 'default',
 	logFilePath: '',
 	dailyNoteFormat: 'YYYY-MM-DD [LOG]'
+}
+
+interface LeafFiles {
+	leaf: WorkspaceLeaf;
+	curFile: string;
+	prevFile: string;
+	active:boolean;
+	logged:boolean;
 }
 
 export default class MyPlugin extends Plugin {
@@ -110,6 +119,7 @@ export default class MyPlugin extends Plugin {
 
 	onunload() {
 		//Plugin disabled
+		this.writeChangelog(this.ObsidianStopLog());
 	}
 
 	async loadSettings() {
@@ -174,64 +184,61 @@ export default class MyPlugin extends Plugin {
 		let prevLeaf = this.app.workspace.getActiveViewOfType(View)?.leaf;
 		//dedicated to openFile event since other ones already update the other one so it won't work properly anymore
 		let prevLeaf2 = this.app.workspace.getActiveViewOfType(View)?.leaf;
-		let prevFile = prevLeaf2?.getViewState().state?.file;
 
-		///*File Opening (open file becomes active, can be use for closing by checking previous active leaf)
-		this.registerEvent(this.app.workspace.on("active-leaf-change", () => {//when active leaf is changed
-			let currLeaf = this.app.workspace.getActiveViewOfType(View)?.leaf;
-			//console.log("ACtive leaf changed!")
-			//update the fact that the leaf has changed, and update the variable after to set up new old leaf
+		//stores previous file before a new open file event
+		let prevFile = prevLeaf?.getViewState().state?.file;
+
+		let LeafFileArray:LeafFiles[] = this.initialiseLeafFile();
+
+		const debouncedActiveLeafChange = debounce(() => {
+			// Update the state and perform your actions
+			//let currLeaf = this.app.workspace.getActiveViewOfType(View)?.leaf;
+			//console.log(currLeaf?.getViewState().active);
 			//Allows for checking what opened a leaf
 			try {
 				//pass through the new leaf, and the active leaf before it (can be where opened from)
-				this.LeafDifferenceActions(prevVisibleLeaves, prevLeaf, "leaf");
+				
+				//this.LeafDifferenceActions(prevVisibleLeaves, prevLeaf, prevFile);
+
+				//console.log( this.getVisibleLeaves(this.getLeafsInWorkspace()) );
+				console.log( this.getLeafIndices(LeafFileArray, this.getVisibleLeaves(this.getLeafsInWorkspace())) );
+				
+				//console.log("prevFile = " + prevFile);
 			} finally { 
 				//sets the old leaf to the current leaf, ready for next active leaf change
-				prevLeaf = currLeaf;
+				//prevLeaf = currLeaf;
 				//sets the current visible leafs as the old visible leafs
-				prevVisibleLeaves = this.getVisibleLeaves(this.getLeafsInWorkspace());
+				//prevVisibleLeaves = this.getVisibleLeaves(this.getLeafsInWorkspace());
 			}
+			//
+			
+			// ...
+		  }, 100);
+
+		///*File Opening (open file becomes active, can be use for closing by checking previous active leaf)
+		this.registerEvent(this.app.workspace.on("active-leaf-change", () => {//when active leaf is changed
+			debouncedActiveLeafChange();
 		}));
 
 		//Opening and closing (when changing up the layout, closing tabs, creating new splits etc.)
 		this.registerEvent(this.app.workspace.on("layout-change", () => {//When you change the layout of the workspace
-			let currLeaf = this.app.workspace.getActiveViewOfType(View)?.leaf;
-			console.log("Layout has Changed!");
-			try {
-				//pass through the new leaf, and the active leaf before it (can be where opened from)
-				this.LeafDifferenceActions(prevVisibleLeaves, prevLeaf2, "leaf");
-				//this.findOpenFileSameLeaf(prevFile, currLeaf?.getViewState().state?.file, prevLeaf2);
-			} finally { 
-				//sets the old leaf to the current leaf, ready for next active leaf change
-				prevLeaf = currLeaf;
-				//sets the current visible leafs as the old visible leafs
-				prevVisibleLeaves = this.getVisibleLeaves(this.getLeafsInWorkspace());
-			}
+			debouncedActiveLeafChange();
 		}));
 
 		//File Opening and closing (mainly for sidebars)
 		this.registerEvent(this.app.workspace.on("resize", () => {//When you resize any component in the workspace
-			let currLeaf = this.app.workspace.getActiveViewOfType(View)?.leaf;
-			//console.log("RESIZE EVENT!!!");
-			try {
-				//pass through the new leaf, and the active leaf before it (can be where opened from)
-				this.LeafDifferenceActions(prevVisibleLeaves, prevLeaf, "leaf");
-			} finally { 
-				//sets the old leaf to the current leaf, ready for next active leaf change
-				prevLeaf = currLeaf;
-				//sets the current visible leafs as the old visible leafs
-				prevVisibleLeaves = this.getVisibleLeaves(this.getLeafsInWorkspace());
-			}
+			debouncedActiveLeafChange();
 		}))//*/
 
 		//File Opening
 		this.registerEvent(this.app.workspace.on("file-open", (file:TFile) => {//When you open a file (normal open file not custom one I want)
+			/*
+			console.log("OPENED A NEW FILES");
 			let currLeaf = this.app.workspace.getActiveViewOfType(View)?.leaf;
+			console.log(currLeaf?.getDisplayText());
 			if (currLeaf?.getViewState().type == "markdown") {
 				//console.log("New file has opened!");
 				let currFile = currLeaf?.getViewState().state?.file;
-				
-				//console.log("----------");
 
 				try {
 					try {
@@ -252,15 +259,196 @@ export default class MyPlugin extends Plugin {
 				} finally {
 					prevFile = currFile;
 				}
-
-				//console.log("--------");
-			}
+			}//*/
+			debouncedActiveLeafChange();
 		}));
 
+		//For closing entire windows of the application
 		this.registerEvent(this.app.workspace.on("window-close", (window) => {
-			window.win.;
+			//window.win.f;
+			console.log("CLOSED A WINDOW");
+			this.writeChangelog("CLOSED A WINDOW");
 		}));
 	}
+
+	initialiseLeafFile():LeafFiles[] {
+		let leafFiles:LeafFiles[] = [];
+		//First I want to get all the visible leaves currently in the workspace window
+		let curVisibleLeaves = this.getVisibleLeaves(this.getLeafsInWorkspace());
+
+		for (let leaf = 0; leaf < curVisibleLeaves.length; leaf++) {
+			
+			leafFiles.push({
+				leaf:curVisibleLeaves[leaf], //Sets the current leaf
+				curFile:curVisibleLeaves[leaf].getViewState().state?.file, //Sets the current file for that current leaf
+				prevFile:"", //Sets the previous file for the current leaf to an empty string "" since there haven't been any yet
+				active: true, //Set the leaf to visible as well
+				logged: false //Flags it to be updated
+			});
+			this.writeChangelog(this.FileOpenLog(leafFiles[leaf].curFile, leafFiles[leaf].leaf));
+		}
+
+		return leafFiles;
+	}
+
+	getLeafIndices(leafFiles:LeafFiles[], curVisibleLeaves:WorkspaceLeaf[]):LeafFiles[] {
+		//this will update all the leaves that are in both the curVisibleLeaves and leafFiles
+		//	but this will miss the leaves closed and opened newly
+
+		//maps the objects from the 2 arrays to a new one, which will be the new updated values of leafFiles for current visible leaves
+		let newLeafData = leafFiles.map(leafdata => { 
+			//finds the leaf in the curVisibleLeaves array that is the same as the current leaf's files we are looking at
+			let curleaf = curVisibleLeaves.find(curleaf => curleaf === leafdata.leaf); 
+			//if the file for that leaf is not active/visible anymore (So leaf deleted) and it hasn't already been processed.
+			if (curleaf?.getViewState().state?.file === undefined && leafdata.active != false) {//if it just changed file, the file would change and not become undefined
+				leafdata.prevFile = leafdata.curFile;
+				leafdata.curFile = curleaf?.getViewState().state?.file;
+				leafdata.active = false;
+				leafdata.logged = false;
+			}
+			//if the curFile in both of the leafs are different
+			else if (leafdata.curFile != curleaf?.getViewState().state?.file) {
+				leafdata.prevFile = leafdata.curFile;					//update the prevFile to the curFile
+				leafdata.curFile = curleaf?.getViewState().state?.file; //update the curFile to the new one in curLeaf
+				leafdata.active = true;//
+				leafdata.logged = false;
+			}
+			return { ...leafdata, ...curleaf }; 
+		});
+		//So now we have dealt with closing leaves, and opeing new files in same leaves
+
+		//We now have to process new leaves that show up by finding if they already exist in the leafFiles, and if they don't, push them into it
+
+		//Find values that are in newLeafData but not in curVisibleLeaves (newly closed leaves)
+		let expiringLeaves = newLeafData.filter(function(obj) {
+			return !curVisibleLeaves.some(function(obj2) {
+				return obj.leaf == obj2;
+			});
+		});
+
+		//Find values that are in curVisibleLeaves but not in newLeafData (newly opened leaves)
+		let newLeafs = curVisibleLeaves.filter(function(obj) {
+			return !newLeafData.some(function(obj2) {
+				return obj == obj2.leaf;
+			});
+		});
+
+		//Finds all the unlogged leaf's that had updates (do different since I want to do actions and return final array at end)
+		let unprocessedFiles = newLeafData.filter(function(obj) {
+			return obj.logged == false;
+		});
+		//this.writeChangelog(this.FileCloseLog(leafdata.prevFile));
+		//this.writeChangelog(this.FileOpenLog(leafdata.curFile, leafdata.leaf));
+
+		//Combine the two arrays of unique entries
+		console.log(expiringLeaves, newLeafs, unprocessedFiles);
+
+		//const unprocessedLeaves = curVisibleLeaves.filter((curleaf) => !leafFiles.some(({ leaf: fileleaf }) => curleaf === fileleaf));
+		//console.log(curVisibleLeaves, unprocessedLeaves);
+
+		//find out the leaves in leafFiles not in curVisibleLeaves
+		// close that leaf, with the new prevFile, and set 
+
+		return newLeafData;
+	}
+
+	setLeafFile(leafFiles:LeafFiles[], curVisibleLeaves:WorkspaceLeaf[]) {
+		//find out which of the 2 arrays is bigger and base the amount of things to process around the highest number
+		let numLeaves:number = 0;
+		let type:number = -1;
+
+		//if the leafFiles array is larger
+		if (leafFiles.length > curVisibleLeaves.length) {
+			numLeaves = leafFiles.length
+			type = 1;
+		}//if the curVisibleLeaves array is larger
+		else if (leafFiles.length < curVisibleLeaves.length) {
+			numLeaves = curVisibleLeaves.length
+			type = 2;
+		}//if they are both the same length
+		else {
+			numLeaves = curVisibleLeaves.length
+			type = 0;
+		}
+
+		//This will map the index of the leaf in both arrays
+		let indeces = new Map<number, number>();
+
+		leafFiles.forEach( (leaf) => {
+			//
+		})
+		/*
+		leafFiles.
+
+		curVisibleLeaves.forEach( (leaf) => {
+			//
+			leaf.
+		})*/
+
+		//For every leaf that needs to be processed (leafs will be the unique object here)
+		for (let leaf = 0; leaf < numLeaves; leaf++) {
+			//first find if the leaf is in both of the arrays
+			
+			//then get the actual indexes, maybe push tthose items to have the same order, so that the leaf items stay in same order
+
+
+			//if both the leaf in the leafFiles array is currently visible
+			if (leafFiles[leaf]) {}
+			if (leafFiles[leaf].leaf === curVisibleLeaves[leaf]) {
+				//if leaf files are the same
+				if (leafFiles[leaf].curFile === curVisibleLeaves[leaf].getViewState().state?.file) {
+					//do nothing - already in array, and processed
+				}
+				//else if the files are different
+				else {
+					//if not already processed and active
+					if (leafFiles[leaf].active === false) {
+						//make prevFile = curFile, and curFile = the new leaf file
+						leafFiles[leaf].prevFile = leafFiles[leaf].curFile;
+						leafFiles[leaf].curFile = curVisibleLeaves[leaf].getViewState().state?.file;
+						leafFiles[leaf].active = true;
+					}
+				}	
+			}
+			
+			//if leafFiles array has more items
+			if (type === 1) {
+				//one leaf has been removed from visible ones
+
+			}//if currVisible array has more items
+			else if (type === 2) {
+				//extra visible leaf so needs to be added to leafFiles
+
+			}//if they both have the same amount
+			else if (type === 0) {
+				//check if there are unprocessed leaves hav ebeen fully removed
+
+			}
+			//if leaf not in array
+				//and leaf is not already active? - unnecessary (would have already been added to array and do nothing this time)
+					//add to array, and set currFile = leaf files, active = ture, leaf = curLeaf, and prevFile = ""
+
+			//if leaf in array but not currVisible (so closed)
+				//and not already unactive
+					//change that array element, leaf stays the same, prevFile = curFile, curFile = "", active = false
+
+			//if the leaf has been completely processed, so both prevFile and curFile = "", then remove from leafFile array
+		}
+
+		try {
+			//
+			
+
+		}
+		finally {
+			//
+		}
+
+		//After doing all of this, I can then read the values from leafFile Array to then figure out the actions to take and process the leafs
+		//	 in terms of opening and closing them with their logs. Do function call for that here.
+		//	 maybe allow passing in information to this function where I can then try to 
+	}
+
 
 	//Log building Logic
 
@@ -297,7 +485,6 @@ export default class MyPlugin extends Plugin {
 	//Open and Closing 
 	// Problem where when going back and forth with buttons does not oopen and close relevant files
 	//still have not factured in hover open notes
-
 	getLeafsInWorkspace():WorkspaceLeaf[] {
 		let leafsInWorkspace:WorkspaceLeaf[] = [];
 
@@ -352,46 +539,67 @@ export default class MyPlugin extends Plugin {
 		//const fileInstances: { [key: string]: number } = {}
 
 		for (let leaf = 0; leaf < leaves.length; leaf++) {
-			const file = leaves[leaf].getViewState().state?.file;
-			if (fileInstances.has(file)) {
+			//This is what is causing undefined error on close of note
+			//when the leaf is destroyed or not their anymore (also close note event), you cant read the viewstate since it isn't viewable
+			const file = leaves[leaf].getViewState().state?.file; 
+
+			/*
+			const lastOpen = leaves[leaf].view.app.workspace.getLastOpenFiles()[0];
+
+			if (prevFile != lastOpen) {
+				//console.log("file:" +prevFile + " => leaf:" + lastOpen)
+			}
+
+			const fileAlt = prevFile;//leaves[leaf].view.app.workspace.getLastOpenFiles()[0];
+
+			//console.log("check: " + file + " => " + fileAlt);
+			//console.log("Last open files: " + leaves[leaf].view.app.workspace.getLastOpenFiles());
+
+			//console.log(leaves[leaf]);//*/
+			
+			if (fileInstances.has(file) && file != undefined) {
 				//fileInstances[file]++;
 				let num = fileInstances.get(file) + 1;
 				fileInstances.delete(file);
 				fileInstances.set(file, num);
-			} else {
+			} 
+			else if (file != undefined){
 				//fileInstances.push({ })
 				//fileInstances[file] = 0;
 				fileInstances.set(file,1);
 			}
+			else {
+				//This condition is nearly right
+				//fileInstances.set(fileAlt,1);
+			}
 		}
+
 		return fileInstances;
 	}
 
-	LeafDifferenceActions(prevVisibleLeaves:WorkspaceLeaf[], prevLeaf:any, mode:string) {
+	LeafDifferenceActions(prevVisibleLeaves:WorkspaceLeaf[], prevLeaf:any, prevFile:string) {
 		let curVisibleLeaves = this.getVisibleLeaves(this.getLeafsInWorkspace());
 		
 		// Dictionary to store the number of instances open for each workspace (before active leaf change and after)
 		//the amount of times a note is open in the previous workspace
-		let prevFileInstances = new Map<string, number>(this.getOpenFileInstances(prevVisibleLeaves));
+		let prevFileInstances = new Map<string, number>(this.getOpenFileInstances(prevVisibleLeaves, prevFile));
 		//the amoung of times a note is open in the current workspace
-		let curFileInstances= new Map<string, number>(this.getOpenFileInstances(curVisibleLeaves));
+		let curFileInstances= new Map<string, number>(this.getOpenFileInstances(curVisibleLeaves, prevFile));
 
 		this.findLeafFileDifference(prevFileInstances, curFileInstances, prevLeaf);
 	}
 
 	findLeafFileDifference(oldView:Map<string,number>, newView:Map<string,number>, prevLeaf:any):Map<string,number> {
 		let difference = new Map<string,number>();
-		let state = ''
-
+		
 		// Check keys in oldView that are not in newView or have different values
 		for (const [key, value] of oldView) {
 			//if File exists in oldView but not in newView
 			if (!newView.has(key)) {
 				//File Closed
-				console.log(key);
+				//console.log(key);
 				this.writeChangelog(this.FileCloseLog(key));
-				state = "close";
-				//difference.set(key, (value - 1)); 
+				difference.set(key, value); 
 				//oldView.get(key);
 			}
 		}
@@ -402,15 +610,18 @@ export default class MyPlugin extends Plugin {
 			if (!oldView.has(key)) {
 				//File Opened
 				this.writeChangelog(this.FileOpenLog(key, prevLeaf));
-				state = "open";
-				//difference.set(key, value);
+				difference.set(key, value);
 				//newView.get(key);
 			}
 		}
 
+		/*
 		if (difference.size > 0) {
+			console.log("------");
 			console.log(difference);
-		}
+			console.log(oldView, newView);
+			console.log("------");
+		}*/
 	  
 		return difference;
 	}
@@ -422,12 +633,14 @@ export default class MyPlugin extends Plugin {
 
 		for (let leaf = 0; leaf < curVisibleLeaves.length; leaf++) {
 			let file = curVisibleLeaves[leaf].getViewState().state?.file;
-			if (file == prevFile) {
-				prevFileOccurence++;
-			}
-			
-			if (file == newFile) {
-				newFileOccurences++;
+			if (prevFile != newFile) {
+				if (file == prevFile) {
+					prevFileOccurence++;
+				}
+				
+				if (file == newFile) {
+					newFileOccurences++;
+				}
 			}
 		}
 
@@ -445,7 +658,7 @@ export default class MyPlugin extends Plugin {
 	}
 
 	CloseOpenFiles() {
-		
+
 	}
 	
 	//Opening and closing files done, apart from hover open file, and logic for having screen available but obsidian tabbed out and multi monitor mode
