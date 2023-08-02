@@ -36,13 +36,7 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	dailyNoteFormat: 'YYYY-MM-DD [LOG]'
 }
 
-interface LeafFiles {
-	leaf: WorkspaceLeaf;
-	curFile: string;
-	prevFile: string;
-	active:boolean;
-	logged:boolean;
-}
+
 
 export default class MyPlugin extends Plugin {
 	// #region Intialisation of plugin
@@ -187,7 +181,6 @@ export default class MyPlugin extends Plugin {
 
 		//stores previous file before a new open file event
 		let prevFile = prevLeaf?.getViewState().state?.file;
-
 		let LeafFileArray:LeafFiles[] = this.initialiseLeafFile();
 
 		const debouncedActiveLeafChange = debounce(() => {
@@ -201,7 +194,7 @@ export default class MyPlugin extends Plugin {
 				//this.LeafDifferenceActions(prevVisibleLeaves, prevLeaf, prevFile);
 
 				//console.log( this.getVisibleLeaves(this.getLeafsInWorkspace()) );
-				console.log( this.getLeafIndices(LeafFileArray, this.getVisibleLeaves(this.getLeafsInWorkspace())) );
+				console.log( this.processLeaves(LeafFileArray, this.getLeafsInWorkspace()) );//this.getVisibleLeaves(this.getLeafsInWorkspace())
 				
 				//console.log("prevFile = " + prevFile);
 			} finally { 
@@ -217,21 +210,25 @@ export default class MyPlugin extends Plugin {
 
 		///*File Opening (open file becomes active, can be use for closing by checking previous active leaf)
 		this.registerEvent(this.app.workspace.on("active-leaf-change", () => {//when active leaf is changed
+			console.log("Leaf change");
 			debouncedActiveLeafChange();
 		}));
 
 		//Opening and closing (when changing up the layout, closing tabs, creating new splits etc.)
 		this.registerEvent(this.app.workspace.on("layout-change", () => {//When you change the layout of the workspace
+			console.log("Layout change");
 			debouncedActiveLeafChange();
 		}));
 
 		//File Opening and closing (mainly for sidebars)
 		this.registerEvent(this.app.workspace.on("resize", () => {//When you resize any component in the workspace
+			console.log("resize");
 			debouncedActiveLeafChange();
 		}))//*/
 
 		//File Opening
 		this.registerEvent(this.app.workspace.on("file-open", (file:TFile) => {//When you open a file (normal open file not custom one I want)
+			console.log("file open");
 			/*
 			console.log("OPENED A NEW FILES");
 			let currLeaf = this.app.workspace.getActiveViewOfType(View)?.leaf;
@@ -262,57 +259,72 @@ export default class MyPlugin extends Plugin {
 			}//*/
 			debouncedActiveLeafChange();
 		}));
-
-		//For closing entire windows of the application
-		this.registerEvent(this.app.workspace.on("window-close", (window) => {
-			//window.win.f;
-			console.log("CLOSED A WINDOW");
-			this.writeChangelog("CLOSED A WINDOW");
-		}));
 	}
 
 	initialiseLeafFile():LeafFiles[] {
 		let leafFiles:LeafFiles[] = [];
 		//First I want to get all the visible leaves currently in the workspace window
-		let curVisibleLeaves = this.getVisibleLeaves(this.getLeafsInWorkspace());
+		let allLeaves = this.getLeafsInWorkspace();//this.getVisibleLeaves(this.getLeafsInWorkspace());
+		let visibleLeaves = this.getVisibleLeaves(allLeaves);
 
-		for (let leaf = 0; leaf < curVisibleLeaves.length; leaf++) {
-			
-			leafFiles.push({
-				leaf:curVisibleLeaves[leaf], //Sets the current leaf
-				curFile:curVisibleLeaves[leaf].getViewState().state?.file, //Sets the current file for that current leaf
-				prevFile:"", //Sets the previous file for the current leaf to an empty string "" since there haven't been any yet
-				active: true, //Set the leaf to visible as well
-				logged: false //Flags it to be updated
-			});
-			this.writeChangelog(this.FileOpenLog(leafFiles[leaf].curFile, leafFiles[leaf].leaf));
+		for (let leaf = 0; leaf < allLeaves.length; leaf++) {
+			let newLeaf = new LeafFiles();
+
+			newLeaf.initLeaf(allLeaves[leaf]);
+			//if can find current leaf, in visible leaves
+			if (visibleLeaves.find( (leaf) => newLeaf.curLeaf === leaf)) {
+				newLeaf.inview = true;
+			}
+			leafFiles.push(newLeaf);
+			//this.writeChangelog(this.FileOpenLog(leafFiles[leaf].curFile, leafFiles[leaf].leaf));
 		}
 
 		return leafFiles;
 	}
 
-	getLeafIndices(leafFiles:LeafFiles[], curVisibleLeaves:WorkspaceLeaf[]):LeafFiles[] {
+	processLeaves(leafFiles:LeafFiles[], allLeaves:WorkspaceLeaf[]):LeafFiles[] {
 		//this will update all the leaves that are in both the curVisibleLeaves and leafFiles
 		//	but this will miss the leaves closed and opened newly
 
 		//maps the objects from the 2 arrays to a new one, which will be the new updated values of leafFiles for current visible leaves
 		let newLeafData = leafFiles.map(leafdata => { 
 			//finds the leaf in the curVisibleLeaves array that is the same as the current leaf's files we are looking at
-			let curleaf = curVisibleLeaves.find(curleaf => curleaf === leafdata.leaf); 
+			let curleaf = allLeaves.find(curleaf => curleaf === leafdata.curLeaf); 
 			//if the file for that leaf is not active/visible anymore (So leaf deleted) and it hasn't already been processed.
-			if (curleaf?.getViewState().state?.file === undefined && leafdata.active != false) {//if it just changed file, the file would change and not become undefined
-				leafdata.prevFile = leafdata.curFile;
-				leafdata.curFile = curleaf?.getViewState().state?.file;
-				leafdata.active = false;
-				leafdata.logged = false;
-			}
-			//if the curFile in both of the leafs are different
-			else if (leafdata.curFile != curleaf?.getViewState().state?.file) {
-				leafdata.prevFile = leafdata.curFile;					//update the prevFile to the curFile
-				leafdata.curFile = curleaf?.getViewState().state?.file; //update the curFile to the new one in curLeaf
-				leafdata.active = true;//
-				leafdata.logged = false;
-			}
+
+			//find whether the curleaf is active
+			let visibleLeaves = this.getVisibleLeaves(allLeaves);
+			let curVisibleLeaf = visibleLeaves.find(curVisibleLeaf => curVisibleLeaf === leafdata.curLeaf);
+
+			/*
+			//if there is atleast one leaf visible, or active
+			if (curVisibleLeaf !== undefined) {
+				//if the current visible leaf is of markdown type, where the files are relevant
+				if (curVisibleLeaf?.getViewState().type == "markdown") {
+					//if it just changed file, the file would change and not become undefined
+					if (curVisibleLeaf?.getViewState().state?.file === undefined && visibleLeaves.contains(curVisibleLeaf) ) {
+						leafdata.initLeaf(curVisibleLeaf);
+						leafdata.updateLeafData(curVisibleLeaf);
+						
+					}
+					//if the curFile in both of the leafs are different
+					else if (leafdata.curFile != curVisibleLeaf?.getViewState().state?.file) {
+						leafdata.prevFile = leafdata.curFile;					//update the prevFile to the curFile
+						leafdata.curFile = curVisibleLeaf?.getViewState().state?.file; //update the curFile to the new one in curLeaf
+						leafdata.active = true;//
+						leafdata.logged = false;
+					}
+					else {
+						//leafdata.prevFile = leafdata.curFile;
+						//leafdata.curFile = curleaf?.getViewState().state?.file;
+						leafdata.curType = curVisibleLeaf.getViewState().type;
+						leafdata.prevType = leafdata.curType;
+						//leafdata.active = false;
+						leafdata.logged = false;
+					}
+				}
+			}//*/
+			
 			return { ...leafdata, ...curleaf }; 
 		});
 		//So now we have dealt with closing leaves, and opeing new files in same leaves
@@ -321,15 +333,15 @@ export default class MyPlugin extends Plugin {
 
 		//Find values that are in newLeafData but not in curVisibleLeaves (newly closed leaves)
 		let expiringLeaves = newLeafData.filter(function(obj) {
-			return !curVisibleLeaves.some(function(obj2) {
-				return obj.leaf == obj2;
+			return !allLeaves.some(function(obj2) {
+				return obj.curLeaf == obj2;
 			});
 		});
 
 		//Find values that are in curVisibleLeaves but not in newLeafData (newly opened leaves)
-		let newLeafs = curVisibleLeaves.filter(function(obj) {
+		let newLeafs = allLeaves.filter(function(obj) {
 			return !newLeafData.some(function(obj2) {
-				return obj == obj2.leaf;
+				return obj == obj2.curLeaf;
 			});
 		});
 
@@ -505,7 +517,7 @@ export default class MyPlugin extends Plugin {
 			let leafStyle = leafs[leaf].view.containerEl.parentElement?.style.display;
 			let mainSplit = leafs[leaf].view.containerEl.parentElement?.parentElement?.parentElement?.parentElement;
 
-			if (leafs[leaf].getViewState().type == "markdown") {
+			//if (leafs[leaf].getViewState().type == "markdown") {
 				if(mainSplit?.className.includes("mod-left-split") && mainSplit.style.display == "none") {
 					//if the left side bar is collapsed
 					//console.log(leafs[index].getViewState().state?.file + " is hidden");
@@ -526,11 +538,13 @@ export default class MyPlugin extends Plugin {
 					//console.log(leafs[index].getViewState().state?.file + " is in foreground");
 					visibleLeafs.push(leafs[leaf]);
 				}
-			}
+			//}
 		}//*/
 		//console.log(visibleLeafs);
 		return visibleLeafs;
 	}
+
+	// #region Old Leaf Logic Funcitons
 
 	getOpenFileInstances(leaves:WorkspaceLeaf[]): Map<string,number> {
 
@@ -660,6 +674,10 @@ export default class MyPlugin extends Plugin {
 	CloseOpenFiles() {
 
 	}
+
+	// #endregion
+
+	// #region Log Functions
 	
 	//Opening and closing files done, apart from hover open file, and logic for having screen available but obsidian tabbed out and multi monitor mode
 	//I think obsidian in foreground is something that is more of a system specific action so might have to ignore that for now but include condition for no leafs active at all (undefined)
@@ -806,6 +824,56 @@ export default class MyPlugin extends Plugin {
 	ObsidianStopLog() {
 		let log = "[target:: Obsidian]  [action:: Stopped]";
 		return log;
+	}
+	// #endregion
+}
+
+class LeafFiles {
+	curLeaf: WorkspaceLeaf;
+	lastLeaf: WorkspaceLeaf | undefined;
+	curFile: string;
+	curType:string
+	prevFile: string;
+	prevType: string;//see what it changed from if switching type of view
+	active:boolean;
+	logged:boolean;//update close open
+	inview:boolean;
+
+	//This is done when the leaf is added to the array keeping track of all leaves
+	public initLeaf(newLeaf:WorkspaceLeaf) {
+		this.curLeaf = newLeaf; //Sets the current leaf
+		this.lastLeaf = undefined;//sets the previous leaf it came from to undefined for now
+		this.curFile = newLeaf.getViewState().state?.file; //Sets the current file for that current leaf
+		this.curType = newLeaf.getViewState().type, //sets the type of view the current leaf is in
+		this.prevFile = ""; //Sets the previous file for the current leaf to an empty string "" since there haven't been any yet
+		this.prevType = ""; //Sets the previous type for the current leaf to an empty string "" since there haven't been any yet
+		this.active = false; //Set the leaf to inactive since just added
+		this.logged = false; //set the leaf to unupdated
+		this.inview = false; //sets the viewable to false since just added
+	}
+
+	//because leaf becomes active on creation, we want to set that
+	public focus(state: boolean) {
+		this.active = state;
+	}
+
+	public view(state: boolean) {
+		this.inview = state;
+	}
+
+	//updates the file 
+	public updateLeafData(oldLeaf:WorkspaceLeaf) {
+		//updating the leaf data
+		this.prevFile = this.curFile;
+		this.prevType = this.curType;
+		this.curFile = this.curLeaf.getViewState().state?.file;
+		this.curType = this.curLeaf.getViewState().type;
+		this.lastLeaf = oldLeaf;
+		this.logged = false;
+	}
+
+	public logChange(state: true) {
+		this.logged = state;
 	}
 }
 
