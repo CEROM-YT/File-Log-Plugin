@@ -36,8 +36,6 @@ const DEFAULT_SETTINGS: MyPluginSettings = {
 	dailyNoteFormat: 'YYYY-MM-DD [LOG]'
 }
 
-
-
 export default class MyPlugin extends Plugin {
 	// #region Intialisation of plugin
 	settings: MyPluginSettings;
@@ -100,7 +98,7 @@ export default class MyPlugin extends Plugin {
 		*/
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		this.addSettingTab(new SampleSettingTab(this.app, this));	
+		//this.addSettingTab(new SampleSettingTab(this.app, this));	
 		
 		this.app.workspace.onLayoutReady( () => {
 			//Only show create events after the file has been loaded
@@ -195,7 +193,6 @@ export default class MyPlugin extends Plugin {
 
 				//console.log( this.getVisibleLeaves(this.getLeafsInWorkspace()) );
 				console.log( this.processLeaves(LeafFileArray, this.getLeafsInWorkspace()) );//this.getVisibleLeaves(this.getLeafsInWorkspace())
-				
 				//console.log("prevFile = " + prevFile);
 			} finally { 
 				//sets the old leaf to the current leaf, ready for next active leaf change
@@ -405,7 +402,7 @@ export default class MyPlugin extends Plugin {
 
 
 			//if both the leaf in the leafFiles array is currently visible
-			if (leafFiles[leaf]) {}
+			//if (leafFiles[leaf]) {}
 			if (leafFiles[leaf].leaf === curVisibleLeaves[leaf]) {
 				//if leaf files are the same
 				if (leafFiles[leaf].curFile === curVisibleLeaves[leaf].getViewState().state?.file) {
@@ -596,9 +593,9 @@ export default class MyPlugin extends Plugin {
 		
 		// Dictionary to store the number of instances open for each workspace (before active leaf change and after)
 		//the amount of times a note is open in the previous workspace
-		let prevFileInstances = new Map<string, number>(this.getOpenFileInstances(prevVisibleLeaves, prevFile));
+		let prevFileInstances = new Map<string, number>(this.getOpenFileInstances(prevVisibleLeaves));
 		//the amoung of times a note is open in the current workspace
-		let curFileInstances= new Map<string, number>(this.getOpenFileInstances(curVisibleLeaves, prevFile));
+		let curFileInstances= new Map<string, number>(this.getOpenFileInstances(curVisibleLeaves));
 
 		this.findLeafFileDifference(prevFileInstances, curFileInstances, prevLeaf);
 	}
@@ -830,26 +827,20 @@ export default class MyPlugin extends Plugin {
 
 class LeafFiles {
 	curLeaf: WorkspaceLeaf;
-	lastLeaf: WorkspaceLeaf | undefined;
+	lastLeaf: WorkspaceLeaf | undefined = undefined;
 	curFile: string;
 	curType:string
-	prevFile: string;
-	prevType: string;//see what it changed from if switching type of view
-	active:boolean;
-	logged:boolean;//update close open
-	inview:boolean;
+	prevFile: string = "";
+	prevType: string = "";//see what it changed from if switching type of view
+	active:boolean = false;
+	logged:boolean = false;//update close open
+	inview:boolean = false;
 
 	//This is done when the leaf is added to the array keeping track of all leaves
 	public initLeaf(newLeaf:WorkspaceLeaf) {
 		this.curLeaf = newLeaf; //Sets the current leaf
-		this.lastLeaf = undefined;//sets the previous leaf it came from to undefined for now
 		this.curFile = newLeaf.getViewState().state?.file; //Sets the current file for that current leaf
-		this.curType = newLeaf.getViewState().type, //sets the type of view the current leaf is in
-		this.prevFile = ""; //Sets the previous file for the current leaf to an empty string "" since there haven't been any yet
-		this.prevType = ""; //Sets the previous type for the current leaf to an empty string "" since there haven't been any yet
-		this.active = false; //Set the leaf to inactive since just added
-		this.logged = false; //set the leaf to unupdated
-		this.inview = false; //sets the viewable to false since just added
+		this.curType = newLeaf.getViewState().type; //sets the type of view the current leaf is in
 	}
 
 	//because leaf becomes active on creation, we want to set that
@@ -890,59 +881,5 @@ class SampleModal extends Modal {
 	onClose() {
 		const {contentEl} = this;
 		contentEl.empty();
-	}
-}
-
-class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
-
-	constructor(app: App, plugin: MyPlugin) {
-		super(app, plugin);
-		this.plugin = plugin;
-	}
-
-	display(): void {
-		const {containerEl} = this;
-
-		containerEl.empty();
-
-		new Setting(containerEl)
-			.setName('Setting #1')
-			.setDesc('It\'s a secret')
-			.addText( (text) => text
-				.setPlaceholder('Enter your secret')
-				.setValue(this.plugin.settings.mySetting)
-				.onChange(async (value) => {
-					this.plugin.settings.mySetting = value;
-					await this.plugin.saveSettings();
-				}));
-
-		/*new Setting(containerEl)
-			
-			.setName('Log File Folder')
-			.setDesc('The location for storing Log')
-			.addDropdown(dropdown => dropdown
-				.addOptions({
-					this.app.vault
-						.getAllLoadedFiles()
-						.filter((f) => f instanceof TFolder)
-						.map((f) => f.path).
-				})
-				.setValue(this.plugin.settings.dailyNoteFormat)
-				.onChange(async (value) => {
-					this.plugin.settings.logFilePath = value;
-					await this.plugin.saveSettings();
-				}));*/
-
-		new Setting(containerEl)
-			.setName('Log File Format')
-			.setDesc('The format for the log file')
-			.addText(text => text
-				.setPlaceholder('Example: Folder/log.md')
-				.setValue(this.plugin.settings.logFilePath)
-				.onChange(async (value) => {
-					this.plugin.settings.logFilePath = value;
-					await this.plugin.saveSettings();
-				}));
 	}
 }
