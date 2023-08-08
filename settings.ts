@@ -1,10 +1,10 @@
-import MyPlugin  from "main";
+import ObsidianNoteLog from "main";
 import {App, PluginSettingTab, Notice, Setting } from "obsidian";
 
 export class SampleSettingTab extends PluginSettingTab {
-	plugin: MyPlugin;
+	plugin: ObsidianNoteLog;
 
-	constructor(app: App, plugin: MyPlugin) {
+	constructor(app: App, plugin: ObsidianNoteLog) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
