@@ -466,7 +466,7 @@ export default class ObsidianNoteLog extends Plugin {
 	}
 
 	buildChangelog(logText:string): string {
-		let logFormat = "[[date::] YYYY-MM-DD[]] [at] [[time::] HH:mm:ss[]]";// [from] [[location:: 
+		let logFormat = "[[date::] YYYY-MM-DD[]] [at] [[time::] HH:mm:ss[]] [[timezone::]Z[]]";// [from] [[location:: 
 
 		let changelogContent = ``;
 		const humanTime = window
@@ -675,11 +675,12 @@ export default class ObsidianNoteLog extends Plugin {
 
 		console.log(oldFolderPath, newFolderPath, oldFile);
 		if (oldFolderPath === newFolderPath) {
-			log = "[target-old:: [[" + oldFile + "]]]  [action:: Renamed] to [target-new:: [[" + file + "|" + filename + "]]]";
+			log = "[target-old:: [[" + oldFile + "]]]  [action:: Renamed] to [target:: [[" + file + "|" + filename + "]]]";
 		}
 		else {
-			log = "[target-old:: [[" + oldFile + "]]]  [action:: Moved] to [target-new:: [[" + file + "|" + filename + "]]]";
+			log = "[target-old:: [[" + oldFile + "]]]  [action:: Moved] to [target:: [[" + file + "|" + filename + "]]]";
 		}
+		
 		
 		return log;
 	}
