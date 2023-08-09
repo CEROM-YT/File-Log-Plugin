@@ -43,12 +43,14 @@ interface NoteLogSettings {
 	mySetting: string;
 	logFilePath: string;
 	dailyNoteFormat: string;
+	logLinks:boolean;
 }
 
 const DEFAULT_SETTINGS: NoteLogSettings = {
 	mySetting: 'default',
 	logFilePath: '',
-	dailyNoteFormat: 'YYYY-MM-DD [LOG]'
+	dailyNoteFormat: 'YYYY-MM-DD [LOG]',
+	logLinks: false
 }
 
 export default class ObsidianNoteLog extends Plugin {
@@ -116,7 +118,7 @@ export default class ObsidianNoteLog extends Plugin {
 		*/
 
 		// This adds a settings tab so the user can configure various aspects of the plugin
-		//this.addSettingTab(new SampleSettingTab(this.app, this));	
+		this.addSettingTab(new SampleSettingTab(this.app, this));	
 		
 		this.app.workspace.onLayoutReady( () => {
 			//Only show create events after the file has been loaded
@@ -204,7 +206,7 @@ export default class ObsidianNoteLog extends Plugin {
 			this.initialiseLeafFile();
 			this.logLeafChanges(false, this.processLeaves(false));
 			//let hoverNotes = this.app.workspace.containerEl.parentElement.parentElement.parentElement.getElementsByClassName("hover-popover");
-		  }, 200);
+		  }, 100);
 
 		///*File Opening (open file becomes active, can be use for closing by checking previous active leaf)
 		
@@ -585,7 +587,6 @@ export default class ObsidianNoteLog extends Plugin {
 	//- [[File]] Opened through [view:: viewType], [link:: ] at [date:: YYYY-MM-DD] [time:: HH:mm:ss]
 
 	FileOpenLog(file:string, prevLeafFiles:LeafFiles | undefined) {
-		let log = "";
 		let filename = this.app.vault.getAbstractFileByPath(file)?.name;
 		/*
 		if (prevLeafFiles !== undefined) {
@@ -601,8 +602,14 @@ export default class ObsidianNoteLog extends Plugin {
 		else {
 			log = "[target:: [[" + file + "|" + filename + "]]]  [action:: Opened]";
 		}//*/
-
-		log = "[target:: [[" + file + "|" + filename + "]]]  [action:: Opened]";
+		let log:string;
+		if (this.settings.logLinks === true) {
+			log = "[target:: [[" + file + "|" + filename + "]]]  [action:: Opened]";
+		}
+		else {
+			log = '[target:: "' + file + '"]  [action:: Opened]';
+		}
+		
 		
 		/*LOGIC ERROR
 			//there is a problem where if I rearrange the layout, it will say that the note was opened from the thing that rearranged the layout
@@ -625,7 +632,14 @@ export default class ObsidianNoteLog extends Plugin {
 	//- [[File]] Closed at [date:: YYYY-MM-DD] [time:: HH:mm:ss]
 	FileCloseLog(file:string) {
 		let filename = this.app.vault.getAbstractFileByPath(file)?.name;
-		let log = "[target:: [[" + file + "|" + filename + "]]]  [action:: Closed]";
+		let log:string;
+		if (this.settings.logLinks === true) {
+			log = "[target:: [[" + file + "|" + filename + "]]]  [action:: Closed]";
+		}
+		else {
+			log = '[target:: "' + file + '"]  [action:: Closed]';
+		}
+		
 		return log;
 	}
 
@@ -633,7 +647,13 @@ export default class ObsidianNoteLog extends Plugin {
 	//- [[File]] Modified at [date:: YYYY-MM-DD] [time:: HH:mm:ss]
 	FileModifyLog(file:string) {
 		let filename = this.app.vault.getAbstractFileByPath(file)?.name;
-		let log = "[target:: [[" + file + "|" + filename + "]]]  [action:: Modified]";
+		let log:string;
+		if (this.settings.logLinks === true) {
+			log = "[target:: [[" + file + "|" + filename + "]]]  [action:: Modified]";
+		}
+		else {
+			log = '[target:: "' + file + '"]]]  [action:: Modified]';
+		}
 		return log;
 	}
 
@@ -643,25 +663,45 @@ export default class ObsidianNoteLog extends Plugin {
 		let createdFile = this.app.vault.getAbstractFileByPath(file);
 		//Should Include use cases for the different types of things created, e.g. image, file, canvas
 		let fileName = createdFile?.path;
-
 		let type:string;
+		let log:string;
 
-		if (createdFile instanceof TFile) {
-			//later look into adding different ty pes more specifically e.g. image, pdf or differentiating canvas from normal note
-			if (createdFile.extension === "md") {
-				type = "Note"
+		if (this.settings.logLinks === true) {
+			if (createdFile instanceof TFile) {
+				//later look into adding different ty pes more specifically e.g. image, pdf or differentiating canvas from normal note
+				if (createdFile.extension === "md") {
+					type = "Note"
+				}
+				else {
+					type = "Attachment"
+				}
+				//console.log(createdFile, createdFile.extension);
+				log = "[target:: [[" + file + "|" + fileName + "]]]  [type:: " + type + "]  [action:: Created]";
+			} else if (createdFile instanceof TFolder) {
+				type = "Folder";
+				log = '[target:: "' + file + '"]]]  [type:: ' + type + ']  [action:: Created]';
+			}else {
+				type = "Other";
+				log = "[target:: [[" + file + "|" + fileName + "]]]  [type:: " + type + "]  [action:: Created]";
 			}
-			else {
-				type = "Attachment"
+		}
+		else {
+			if (createdFile instanceof TFile) {
+				//later look into adding different ty pes more specifically e.g. image, pdf or differentiating canvas from normal note
+				if (createdFile.extension === "md") {
+					type = "Note"
+				}
+				else {
+					type = "Attachment"
+				}
+			} else if (createdFile instanceof TFolder) {
+				type = "Folder";
+			}else {
+				type = "Other";
 			}
-			console.log(createdFile, createdFile.extension);
-		} else if (createdFile instanceof TFolder) {
-			type = "Folder";
-		}else {
-			type = "Other";
+			log = '[target:: "' + file + '"]]]  [type:: ' + type + ']  [action:: Created]';
 		}
 		
-		let log = "[target:: [[" + file + "|" + fileName + "]]]  [type:: " + type + "]  [action:: Created]  ";
 		return log;
 	}
 
@@ -671,16 +711,25 @@ export default class ObsidianNoteLog extends Plugin {
 		let filename = this.app.vault.getAbstractFileByPath(file)?.name;
 		let oldFolderPath = oldFile.replace('.*\/', "");
 		let newFolderPath = file.replace(filename, "");
-		let log;
 
-		console.log(oldFolderPath, newFolderPath, oldFile);
-		if (oldFolderPath === newFolderPath) {
-			log = "[target-old:: [[" + oldFile + "]]]  [action:: Renamed] to [target:: [[" + file + "|" + filename + "]]]";
+		let log:string;
+
+		if (this.settings.logLinks === true) {
+			if (oldFolderPath === newFolderPath || this.app.vault.getAbstractFileByPath(file) instanceof TFolder) {
+				log = "[target-old:: [[" + oldFile + "]]]  [action:: Renamed] to [target:: [[" + file + "|" + filename + "]]]";
+			}
+			else {
+				log = "[target-old:: [[" + oldFile + "]]]  [action:: Moved] to [target:: [[" + file + "|" + filename + "]]]";
+			}
 		}
 		else {
-			log = "[target-old:: [[" + oldFile + "]]]  [action:: Moved] to [target:: [[" + file + "|" + filename + "]]]";
+			if (oldFolderPath === newFolderPath) {
+				log = '[target-old:: "' + oldFile + '"]  [action:: Renamed] to [target:: "' + file + '"]';
+			}
+			else {
+				log = '[target-old:: "' + oldFile + '"]  [action:: Moved] to [target:: "' + file + '"]';
+			}
 		}
-		
 		
 		return log;
 	}
@@ -692,7 +741,13 @@ export default class ObsidianNoteLog extends Plugin {
 		so I move the note all the way to a different one, with a new link to that location so I can still refer to it, or keep a folder in the same vault for it 
 		(later on move it, assign a trash location in settings, or use standard .trash folder option => find out how to activate in settings => files and links tab in settings!)*/
 	FileDeleteLog(file:string) {
-		let log = "[target:: [[" + file + "]]]  [action:: Deleted]";
+		let log:string;
+		if (this.settings.logLinks === true) {
+			log = "[target:: [[" + file + "]]]  [action:: Deleted]";
+		}
+		else {
+			log = '[target:: "' + file + '"]  [action:: Deleted]';
+		}
 		return log;
 	}
 
@@ -725,5 +780,69 @@ class SampleModal extends Modal {
 	onClose() {
 		const {contentEl} = this;
 		contentEl.empty();
+	}
+}
+
+class SampleSettingTab extends PluginSettingTab {
+	plugin: ObsidianNoteLog;
+
+	constructor(app: App, plugin: ObsidianNoteLog) {
+		super(app, plugin);
+		this.plugin = plugin;
+	}
+
+	display(): void {
+		const {containerEl} = this;
+
+		containerEl.empty();
+
+		/*new Setting(containerEl)
+			.setName('Setting #1')
+			.setDesc('It\'s a secret')
+			.addText( (text) => text
+				.setPlaceholder('Enter your secret')
+				.setValue(this.plugin.settings.mySetting)
+				.onChange(async (value) => {
+					this.plugin.settings.mySetting = value;
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			
+			.setName('Log File Folder')
+			.setDesc('The location for storing Log')
+			.addDropdown(dropdown => dropdown
+				.addOptions({
+					this.app.vault
+						.getAllLoadedFiles()
+						.filter((f) => f instanceof TFolder)
+						.map((f) => f.path).
+				})
+				.setValue(this.plugin.settings.dailyNoteFormat)
+				.onChange(async (value) => {
+					this.plugin.settings.logFilePath = value;
+					await this.plugin.saveSettings();
+				}));*/
+
+		new Setting(containerEl)
+			.setName('Log File Format')
+			.setDesc('The format for the log file')
+			.addText(text => text
+				.setPlaceholder('Example: Folder/log.md')
+				.setValue(this.plugin.settings.logFilePath)
+				.onChange(async (value) => {
+					this.plugin.settings.logFilePath = value;
+					await this.plugin.saveSettings();
+				}));
+		
+		new Setting(containerEl)
+			.setName('Links or Strings')
+			.setDesc('Whether to have links to files enabled or just the paths to files')
+			.addToggle( (toggle) => toggle
+				.setValue(this.plugin.settings.logLinks)
+				.onChange(async (value) => {
+					this.plugin.settings.logLinks = value;
+					await this.plugin.saveSettings();
+				}));
 	}
 }
