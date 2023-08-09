@@ -152,8 +152,6 @@ export default class ObsidianNoteLog extends Plugin {
 	// #region 
 
 	registerGeneralEvents() {
-		let logfile = window.moment().format(this.settings.logFilePath);
-
 		this.writeChangelog(this.ObsidianStartLog());
 
 		//Monitors Files created while application running and not during start up
@@ -178,6 +176,7 @@ export default class ObsidianNoteLog extends Plugin {
 			The event is carried out every 2 seconds, and currently if editing for a long time it will show all those details
 		bare in mind that the accuracy of the information would be of by +- 2 seconds at the start and end times of a modification block*/
 		this.registerEvent(this.app.vault.on("modify", (file:TAbstractFile) => {
+			let logfile = window.moment().format(this.settings.logFilePath);
 			if (file.path != logfile) {
 				this.writeChangelog(this.FileModifyLog(file.path));
 			}
