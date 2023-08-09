@@ -651,7 +651,7 @@ export default class ObsidianNoteLog extends Plugin {
 			log = "[target:: [[" + file + "|" + filename + "]]]  [action:: Modified]";
 		}
 		else {
-			log = '[target:: "' + file + '"]]]  [action:: Modified]';
+			log = '[target:: "' + file + '"]  [action:: Modified]';
 		}
 		return log;
 	}
@@ -681,7 +681,7 @@ export default class ObsidianNoteLog extends Plugin {
 				log = '[target:: "' + file + '"]]]  [type:: ' + type + ']  [action:: Created]';
 			}else {
 				type = "Other";
-				log = "[target:: [[" + file + "|" + fileName + "]]]  [type:: " + type + "]  [action:: Created]";
+				log = "[target:: [[" + file + "|" + fileName + "]  [type:: " + type + "]  [action:: Created]";
 			}
 		}
 		else {
@@ -698,7 +698,7 @@ export default class ObsidianNoteLog extends Plugin {
 			}else {
 				type = "Other";
 			}
-			log = '[target:: "' + file + '"]]]  [type:: ' + type + ']  [action:: Created]';
+			log = '[target:: "' + file + '"]  [type:: ' + type + ']  [action:: Created]';
 		}
 		
 		return log;
