@@ -170,7 +170,7 @@ export default class ObsidianNoteLog extends Plugin {
 			what stages it has gone through, or for a file, how the name for the concept has changed over time, although this would
 			mostly be minimised I think but I'm not sure, most of this program is thinking just in case*/
 		this.registerEvent(this.app.vault.on("rename", (file:TAbstractFile, oldName:string) => {
-			console.log("renamed: " + file.path + " from " + oldName);
+			//console.log("renamed: " + file.path + " from " + oldName);
 			this.writeChangelog(this.FileMoveLog(file.path, oldName));
 		})); 
 
@@ -427,7 +427,7 @@ export default class ObsidianNoteLog extends Plugin {
 			if (end === true && leafdata.inview === true && leafdata.prevType === "markdown") {
 				leafdata.logged[1] = false;
 				leafdata.inview = false;
-				console.log("Closing open files");
+				//console.log("Closing open files");
 			}
 
 			if (leafdata.logged[1] === false && leafdata.prevFile !== undefined) {
@@ -462,9 +462,9 @@ export default class ObsidianNoteLog extends Plugin {
 		if (file instanceof TFile) {
 		  	await this.app.vault.append(file, content);
 		} else {
-		  	//new Notice("Couldn't write changelog: check the file path, file might not exist");
+		  	new Notice("Couldn't write Note log: check the file path, file might not exist");
 		}
-		console.log(file, content);
+		//console.log(file, content);
 	}
 
 	buildChangelog(logText:string): string {
